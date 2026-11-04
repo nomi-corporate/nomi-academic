@@ -22,7 +22,7 @@ Os mantenedores designados são `gabrielwilliandev` e `Lucas200507`. Autorizaç�
 
 Workflow `Service CI`, jobs:
 - `Build and smoke check`: restaura, compila Release e publica a API, executa os projetos de teste disponíveis em `tests/**/*.csproj` e exige HTTP 200 com corpo `Healthy` em `/health/live`.
-- `Container build`: constrói a imagem, inicia um contêiner, valida o mesmo liveness e exporta a imagem.
+- `Container build`: constrói a imagem, inicia um contêiner, valida o mesmo liveness. A exportação da imagem é opcional em execução manual.
 - `Workflow lint`: valida o próprio workflow.
 
 Checks de proteção existentes mantêm seus nomes: `Build and smoke check` e `Container build`. Recomenda-se tornar `Workflow lint` obrigatório também; adicionar essa exigência é uma configuração separada do GitHub.
@@ -32,10 +32,12 @@ Ainda não há projetos de teste. O resumo informa essa ausência; passar em bui
 ## Pacotes gerados
 
 - API publicada em arquivo `nomi-academic-api.tar.gz`, com build.json, retenção de 7 dias.
-- Imagem Docker `nomi-academic:<SHA>` em `nomi-academic-image.tar.gz`, acompanhada de SHA256SUMS e ID local da imagem. Retenção: 3 dias em PR e 7 dias na principal/manual.
+- Imagem Docker `nomi-academic:<SHA>` em `nomi-academic-image.tar.gz`, acompanhada de SHA256SUMS e ID local da imagem. Gerada somente em execução manual com `export_image=true`; retenção de 1 dia. PRs e pushes não armazenam essa imagem para reduzir uso de armazenamento.
 - Resultados TRX, quando existirem, por 7 dias. Não gerar relatório vazio para simular teste.
 
 Para inspecionar uma imagem, baixar o artefato, conferir `sha256sum --check SHA256SUMS`, executar `docker load --input nomi-academic-image.tar.gz` e usar a tag de commit registrada. O ID local não é o digest de um registry.
+
+Para baixar a imagem, abrir Actions → Service CI → Run workflow e marcar Exportar imagem Docker. Usar a branch principal para um pacote de referência confiável. O caminho de exportação foi exercitado nos PRs de estruturação antes de se tornar uma opção manual.
 
 O pacote de API e a imagem são construídos por jobs distintos a partir do mesmo SHA. A futura implantação deve usar a imagem testada, sem reconstruí-la. Liveness comprova processo respondendo; readiness de banco/filas entra quando essas dependências existirem.
 

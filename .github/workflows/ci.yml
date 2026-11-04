@@ -5,6 +5,11 @@ on:
   push:
     branches: [master]
   workflow_dispatch:
+    inputs:
+      export_image:
+        description: Exportar imagem Docker para download (artefato temporário)
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -135,12 +140,14 @@ jobs:
           done
           exit 1
       - name: Export validated image
+        if: github.event_name == 'workflow_dispatch' && inputs.export_image
         run: |
           mkdir -p artifacts
           docker save nomi-academic:"$GITHUB_SHA" | gzip > artifacts/nomi-academic-image.tar.gz
           docker image inspect nomi-academic:"$GITHUB_SHA" --format '{{.Id}}' > artifacts/image-id.txt
           (cd artifacts && sha256sum nomi-academic-image.tar.gz > SHA256SUMS)
       - name: Upload container image
+        if: github.event_name == 'workflow_dispatch' && inputs.export_image
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: nomi-academic-image-${{ github.sha }}-${{ github.run_attempt }}
@@ -150,4 +157,4 @@ jobs:
             artifacts/SHA256SUMS
           if-no-files-found: error
           compression-level: 0
-          retention-days: ${{ github.event_name == 'pull_request' && 3 || 7 }}
+          retention-days: 1
