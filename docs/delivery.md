@@ -1,26 +1,64 @@
-# Integração e entrega
+# Integração e entrega — nomi-academic
 
-## Política pretendida para master
+## Escopo e rastreabilidade
 
-- Branch principal: `master`.
-- Todos trabalham em branches `feat/`, `fix/` ou `chore/` e abrem pull requests.
-- Apenas gabrielwilliandev e Lucas200507 podem integrar mudanças na master.
-- Exigir ao menos uma revisão de outro colaborador, resolver conversas e passar nos checks obrigatórios.
-- Invalidar aprovações quando novos commits forem enviados.
-- Aplicar verificações também aos administradores; sem bypass, force push ou exclusão da master.
-- CODEOWNERS exige revisão quando habilitado nas regras; sozinho não restringe quem faz merge.
+Esta entrega estrutura a parte de CI da [TEC-007 — CI/CD](https://github.com/orgs/nomi-corporate/projects/1/views/1?pane=issue&itemId=292993590). Ela não conclui o CD nem a TEC inteira.
 
-Esta política NÃO está aplicada pelo conteúdo deste arquivo. Configurar as regras no GitHub após criar o remoto. Responsáveis definidos: gabrielwilliandev e Lucas200507. Organização: nomi-corporate.
+Branch principal: `master`. Cada alteração entra por branch e PR associado à HU/TEC, com responsável, parte entregue, dependências e evidências. Uma HU que atravessa repositórios só termina após validar a entrega completa.
 
-A restrição de quem pode enviar alterações à branch protegida é oferecida para organizações, conforme o plano e a visibilidade. Em repositórios privados, verificar GitHub Team ou os recursos do plano disponível. Não substituir proteção por uma simples verificação de nome de usuário no workflow.
+Os mantenedores designados são `gabrielwilliandev` e `Lucas200507`. Autorizações excepcionais e proteções são configuradas no GitHub; este documento não as altera. Conferir as regras efetivas antes de integrar. Não falsificar checks nem desabilitar proteções para fazer o pipeline passar.
 
-## CI/CD
+## Disparos e segurança
 
-O workflow `Service CI` compila e publica a API, consulta `/health/live` e constrói a imagem Docker em jobs separados. Testes de negócio serão adicionados com seus casos de uso.
+- PRs destinados a `master`, pushes em `master` e execução manual em Actions. A execução manual passa a aparecer quando o workflow estiver na branch principal.
+- Não há filtro por caminho: uma alteração documental também publica os checks obrigatórios, evitando estados Expected indefinidos.
+- Novos commits cancelam execuções anteriores do mesmo PR. Execuções já iniciadas da principal não são canceladas automaticamente; a fila de concurrency pode substituir execuções ainda pendentes.
+- Token com `contents: read`; checkout sem persistir credenciais. Nenhum job recebe credenciais AWS ou publica em registry, loja ou hospedagem.
+- Actions fixadas por SHA. Para atualizar, conferir a origem e o commit da versão desejada, atualizar os pins e executar os checks.
+- O job `Workflow lint` valida todos os YAMLs com actionlint 1.7.12, cujo binário é conferido por SHA-256.
+- Não usar `pull_request_target` para executar código de PR. Runners são hospedados no GitHub; não executar contribuições externas em máquina pessoal com segredos.
 
-Para CD: executar após merge aprovado em master, produzir artefato identificado pelo commit e usar ambientes separados. Autenticar na AWS com OIDC e permissões mínimas por repositório/ambiente, sem chaves AWS permanentes no GitHub. Produção e aprovação de deploy dependerão dos recursos do plano. Deploy ainda não foi configurado.
+## Pipeline atual
 
-## Referências
+Workflow `Service CI`, jobs:
+- `Build and smoke check`: restaura, compila Release e publica a API, executa os projetos de teste disponíveis em `tests/**/*.csproj` e exige HTTP 200 com corpo `Healthy` em `/health/live`.
+- `Container build`: constrói a imagem, inicia um contêiner, valida o mesmo liveness. A exportação da imagem é opcional em execução manual.
+- `Workflow lint`: valida o próprio workflow.
 
-- https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches
-- https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments
+Checks de proteção existentes mantêm seus nomes: `Build and smoke check` e `Container build`. Recomenda-se tornar `Workflow lint` obrigatório também; adicionar essa exigência é uma configuração separada do GitHub.
+
+Ainda não há projetos de teste. O resumo informa essa ausência; passar em build/liveness não significa que regras de negócio foram testadas. Novos projetos de teste devem ficar sob `tests/`, ser incluídos na solução e verificar comportamento relevante.
+
+## Pacotes gerados
+
+- API publicada em arquivo `nomi-academic-api.tar.gz`, com build.json, retenção de 7 dias.
+- Imagem Docker `nomi-academic:<SHA>` em `nomi-academic-image.tar.gz`, acompanhada de SHA256SUMS e ID local da imagem. Gerada somente em execução manual com `export_image=true`; retenção de 1 dia. PRs e pushes não armazenam essa imagem para reduzir uso de armazenamento.
+- Resultados TRX, quando existirem, por 7 dias. Não gerar relatório vazio para simular teste.
+
+Para inspecionar uma imagem, baixar o artefato, conferir `sha256sum --check SHA256SUMS`, executar `docker load --input nomi-academic-image.tar.gz` e usar a tag de commit registrada. O ID local não é o digest de um registry.
+
+Para baixar a imagem, abrir Actions → Service CI → Run workflow e marcar Exportar imagem Docker. Usar a branch principal para um pacote de referência confiável. O caminho de exportação foi exercitado nos PRs de estruturação antes de se tornar uma opção manual.
+
+O pacote de API e a imagem são construídos por jobs distintos a partir do mesmo SHA. A futura implantação deve usar a imagem testada, sem reconstruí-la. Liveness comprova processo respondendo; readiness de banco/filas entra quando essas dependências existirem.
+
+## Identidade e artefatos
+
+Os nomes incluem o SHA testado e a tentativa da execução. Em PR, `github.sha` identifica o merge de teste do GitHub; não confundir esse valor com o último commit da branch de origem. `build.json` registra repositório, SHA, execução e tentativa.
+
+Artefatos servem para inspeção e reaproveitamento técnico. Um artefato de PR não é uma release confiável para implantação. Para promover, usar uma execução bem-sucedida de push da branch principal, conferir origem, SHA e ambiente. A retenção curta não é armazenamento permanente de releases.
+
+A indisponibilidade do upload de um artefato obrigatório falha o job, mesmo que o build tenha passado. Se atingir a cota de artefatos, revisar armazenamento e retenção; não mascarar a falha.
+
+## CD AWS — próxima etapa
+
+O deploy ainda não está implementado e esta pipeline não cria recursos pagos.
+
+Antes de ativar CD de backend:
+1. Aprovar a infraestrutura dev e seu orçamento, validar permissões da conta AWS e a viabilidade de OIDC.
+2. Definir registry ECR, host/orquestrador, rede, HTTPS, gerenciamento de segredos e health/readiness reais.
+3. Criar a role do GitHub com identidade temporária e escopo por repositório, branch/ambiente e recursos permitidos. Conceder `id-token: write` somente ao job de deploy.
+4. Publicar imagem da principal com tag do commit e registrar seu digest no registry; implantar o mesmo digest validado.
+5. Verificar saúde, preservar versão anterior e documentar rollback. Migrations precisam ser compatíveis com a versão anterior ou ter plano próprio de recuperação.
+6. Definir ambiente e aprovação disponíveis no plano. Não adicionar chaves AWS permanentes como atalho caso OIDC esteja indisponível.
+
+Referências: [workflows e permissões](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax), [artefatos](https://docs.github.com/en/actions/tutorials/store-and-share-data) e proposta TEC-004 do projeto.
