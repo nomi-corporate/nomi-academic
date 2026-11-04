@@ -1,0 +1,20 @@
+# Local settings and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+appsettings.Local.json
+appsettings.*.Local.json
+# Build output
+node_modules/
+dist/
+.angular/
+coverage/
+bin/
+obj/
+TestResults/
+.vs/
+.idea/
+.DS_Store
+Thumbs.db
