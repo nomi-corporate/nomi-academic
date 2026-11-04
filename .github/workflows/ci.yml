@@ -3,40 +3,149 @@ on:
   pull_request:
     branches: [master]
   push:
-    branches: [master, chore/bootstrap-project]
+    branches: [master]
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: service-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+defaults:
+  run:
+    shell: bash
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  DOTNET_NOLOGO: '1'
 jobs:
+  workflow:
+    name: Workflow lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Validate GitHub Actions workflows
+        env:
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          curl --fail --silent --show-error --location \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz \
+            --output "$RUNNER_TEMP/actionlint.tar.gz"
+          echo "$ACTIONLINT_SHA256  $RUNNER_TEMP/actionlint.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" -color
   build:
     name: Build and smoke check
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           global-json-file: global.json
       - run: dotnet restore Nomi.Academic.sln
       - run: dotnet build Nomi.Academic.sln -c Release --no-restore
+      - name: Run available tests
+        run: |
+          test_count=0
+          if [[ -d tests ]]; then
+            while IFS= read -r -d '' project; do
+              test_count=$((test_count + 1))
+              dotnet test "$project" -c Release --logger trx --results-directory "$PWD/artifacts/test-results"
+            done < <(find tests -name '*.csproj' -print0)
+          fi
+          if [[ "$test_count" -eq 0 ]]; then
+            echo 'Sem projetos de teste em tests/. Build e liveness não substituem testes de negócio.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            printf 'Projetos de teste executados: %s\n' "$test_count" >> "$GITHUB_STEP_SUMMARY"
+          fi
       - run: dotnet publish src/Nomi.Academic.Api -c Release --no-build -o artifacts/api
       - name: Validate liveness endpoint
-        shell: bash
         run: |
-          dotnet artifacts/api/Nomi.Academic.Api.dll --urls http://127.0.0.1:8080 > /tmp/nomi-api.log 2>&1 &
+          dotnet artifacts/api/Nomi.Academic.Api.dll --urls http://127.0.0.1:18080 > "$RUNNER_TEMP/nomi-api.log" 2>&1 &
           api_pid=$!
-          trap 'kill "$api_pid" 2>/dev/null || true; cat /tmp/nomi-api.log' EXIT
-          for attempt in {1..20}; do
-            if curl --fail --silent http://127.0.0.1:8080/health/live; then exit 0; fi
+          trap 'kill "$api_pid" 2>/dev/null || true; cat "$RUNNER_TEMP/nomi-api.log"' EXIT
+          for attempt in {1..30}; do
+            if body=$(curl --fail --silent http://127.0.0.1:18080/health/live) && [[ "$body" == 'Healthy' ]]; then
+              echo 'Liveness: HTTP 200 Healthy' >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
             sleep 1
           done
           exit 1
+      - name: Record build identity
+        env:
+          NOMI_REPOSITORY: ${{ github.repository }}
+          NOMI_COMMIT: ${{ github.sha }}
+          NOMI_RUN_ID: ${{ github.run_id }}
+          NOMI_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          mkdir -p artifacts
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          metadata = {key.removeprefix("NOMI_").lower(): value for key, value in os.environ.items() if key.startswith("NOMI_")}
+          Path("artifacts/build.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+          PY
+          printf '### nomi-academic\nCommit: `%s`\n' "$NOMI_COMMIT" >> "$GITHUB_STEP_SUMMARY"
+      - name: Archive API package
+        run: tar -czf artifacts/nomi-academic-api.tar.gz -C artifacts/api .
+      - name: Upload API package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nomi-academic-api-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            artifacts/nomi-academic-api.tar.gz
+            artifacts/build.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nomi-academic-tests-${{ github.sha }}-${{ github.run_attempt }}
+          path: artifacts/test-results/**/*.trx
+          if-no-files-found: ignore
+          retention-days: 7
   container:
     name: Container build
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - run: docker build --tag nomi-academic:ci .
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Build container
+        run: docker build --tag nomi-academic:"$GITHUB_SHA" .
+      - name: Validate container liveness
+        run: |
+          container_id=$(docker run --detach --publish 127.0.0.1:18080:8080 nomi-academic:"$GITHUB_SHA")
+          trap 'docker logs "$container_id"; docker rm --force "$container_id" > /dev/null' EXIT
+          for attempt in {1..30}; do
+            if body=$(curl --fail --silent http://127.0.0.1:18080/health/live) && [[ "$body" == 'Healthy' ]]; then
+              echo 'Contêiner: HTTP 200 Healthy' >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1
+      - name: Export validated image
+        run: |
+          mkdir -p artifacts
+          docker save nomi-academic:"$GITHUB_SHA" | gzip > artifacts/nomi-academic-image.tar.gz
+          docker image inspect nomi-academic:"$GITHUB_SHA" --format '{{.Id}}' > artifacts/image-id.txt
+          (cd artifacts && sha256sum nomi-academic-image.tar.gz > SHA256SUMS)
+      - name: Upload container image
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nomi-academic-image-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            artifacts/nomi-academic-image.tar.gz
+            artifacts/image-id.txt
+            artifacts/SHA256SUMS
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: ${{ github.event_name == 'pull_request' && 3 || 7 }}
