@@ -1,0 +1,10 @@
+**/bin
+**/obj
+.git
+.vs
+.env*
+**/appsettings.*.Local.json
+**/*.pem
+**/*.key
+
+artifacts/

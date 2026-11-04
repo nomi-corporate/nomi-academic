@@ -1,23 +1,42 @@
-name: Repository checks
+name: Service CI
 on:
   pull_request:
     branches: [master]
   push:
-    branches: [master]
+    branches: [master, chore/bootstrap-project]
 permissions:
   contents: read
+concurrency:
+  group: service-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
-  repository-checks:
-    name: Repository structure
+  build:
+    name: Build and smoke check
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Check commit whitespace
-        run: git show --format= --check HEAD
-      - name: Check repository documentation
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - run: dotnet restore Nomi.Academic.sln
+      - run: dotnet build Nomi.Academic.sln -c Release --no-restore
+      - run: dotnet publish src/Nomi.Academic.Api -c Release --no-build -o artifacts/api
+      - name: Validate liveness endpoint
         shell: bash
         run: |
-          test -s README.md
-          test -s CONTRIBUTING.md
-          test -s docs/architecture.md
-          test -s docs/delivery.md
+          dotnet artifacts/api/Nomi.Academic.Api.dll --urls http://127.0.0.1:8080 > /tmp/nomi-api.log 2>&1 &
+          api_pid=$!
+          trap 'kill "$api_pid" 2>/dev/null || true; cat /tmp/nomi-api.log' EXIT
+          for attempt in {1..20}; do
+            if curl --fail --silent http://127.0.0.1:8080/health/live; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+  container:
+    name: Container build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --tag nomi-academic:ci .
