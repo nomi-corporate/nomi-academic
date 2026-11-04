@@ -4,13 +4,13 @@
 
 - Branch principal: `master`.
 - Todos trabalham em branches `feat/`, `fix/` ou `chore/` e abrem pull requests.
-- Apenas o dono e uma segunda pessoa designada podem integrar mudanças na master.
+- Apenas gabrielwilliandev e Lucas200507 podem integrar mudanças na master.
 - Exigir ao menos uma revisão de outro colaborador, resolver conversas e passar nos checks obrigatórios.
 - Invalidar aprovações quando novos commits forem enviados.
 - Aplicar verificações também aos administradores; sem bypass, force push ou exclusão da master.
 - CODEOWNERS exige revisão quando habilitado nas regras; sozinho não restringe quem faz merge.
 
-Esta política NÃO está aplicada pelo conteúdo deste arquivo. Configurar as regras no GitHub após criar o remoto. A segunda pessoa e a organização ainda precisam ser informadas.
+Esta política NÃO está aplicada pelo conteúdo deste arquivo. Configurar as regras no GitHub após criar o remoto. Responsáveis definidos: gabrielwilliandev e Lucas200507. A organização ainda precisa ser criada.
 
 A restrição de quem pode enviar alterações à branch protegida é oferecida para organizações, conforme o plano e a visibilidade. Em repositórios privados, verificar GitHub Team ou os recursos do plano disponível. Não substituir proteção por uma simples verificação de nome de usuário no workflow.
 
