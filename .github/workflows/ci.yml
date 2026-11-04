@@ -69,6 +69,7 @@ jobs:
           api_pid=$!
           trap 'kill "$api_pid" 2>/dev/null || true; cat "$RUNNER_TEMP/nomi-api.log"' EXIT
           for attempt in {1..30}; do
+            printf 'Liveness: tentativa %s\n' "$attempt"
             if body=$(curl --fail --silent http://127.0.0.1:18080/health/live) && [[ "$body" == 'Healthy' ]]; then
               echo 'Liveness: HTTP 200 Healthy' >> "$GITHUB_STEP_SUMMARY"
               exit 0
@@ -90,7 +91,7 @@ jobs:
           metadata = {key.removeprefix("NOMI_").lower(): value for key, value in os.environ.items() if key.startswith("NOMI_")}
           Path("artifacts/build.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
           PY
-          printf '### nomi-academic\nCommit: `%s`\n' "$NOMI_COMMIT" >> "$GITHUB_STEP_SUMMARY"
+          printf '### nomi-academic\nCommit: %s\n' "$NOMI_COMMIT" >> "$GITHUB_STEP_SUMMARY"
       - name: Archive API package
         run: tar -czf artifacts/nomi-academic-api.tar.gz -C artifacts/api .
       - name: Upload API package
@@ -125,6 +126,7 @@ jobs:
           container_id=$(docker run --detach --publish 127.0.0.1:18080:8080 nomi-academic:"$GITHUB_SHA")
           trap 'docker logs "$container_id"; docker rm --force "$container_id" > /dev/null' EXIT
           for attempt in {1..30}; do
+            printf 'Liveness: tentativa %s\n' "$attempt"
             if body=$(curl --fail --silent http://127.0.0.1:18080/health/live) && [[ "$body" == 'Healthy' ]]; then
               echo 'Contêiner: HTTP 200 Healthy' >> "$GITHUB_STEP_SUMMARY"
               exit 0
