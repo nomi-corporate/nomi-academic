@@ -10,15 +10,13 @@
 - Aplicar verificações também aos administradores; sem bypass, force push ou exclusão da master.
 - CODEOWNERS exige revisão quando habilitado nas regras; sozinho não restringe quem faz merge.
 
-Esta política NÃO está aplicada pelo conteúdo deste arquivo. Configurar as regras no GitHub após criar o remoto. Responsáveis definidos: gabrielwilliandev e Lucas200507. A organização ainda precisa ser criada.
+Esta política NÃO está aplicada pelo conteúdo deste arquivo. Configurar as regras no GitHub após criar o remoto. Responsáveis definidos: gabrielwilliandev e Lucas200507. Organização: nomi-corporate.
 
 A restrição de quem pode enviar alterações à branch protegida é oferecida para organizações, conforme o plano e a visibilidade. Em repositórios privados, verificar GitHub Team ou os recursos do plano disponível. Não substituir proteção por uma simples verificação de nome de usuário no workflow.
 
 ## CI/CD
 
-O workflow inicial `Repository checks` verifica somente a estrutura e espaços inválidos: ainda não há código de aplicativo. Ele NÃO comprova compilação ou testes de produto.
-
-Ao adicionar o código, incluir instalação reproduzível, compilação e testes: npm ci/build/test no mobile; dotnet restore/build/test nos serviços. Cada repositório terá seu pipeline independente.
+O workflow `Service CI` compila e publica a API, consulta `/health/live` e constrói a imagem Docker em jobs separados. Testes de negócio serão adicionados com seus casos de uso.
 
 Para CD: executar após merge aprovado em master, produzir artefato identificado pelo commit e usar ambientes separados. Autenticar na AWS com OIDC e permissões mínimas por repositório/ambiente, sem chaves AWS permanentes no GitHub. Produção e aprovação de deploy dependerão dos recursos do plano. Deploy ainda não foi configurado.
 

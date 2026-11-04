@@ -13,10 +13,14 @@ O Academic deve usar Transactional Outbox para publicar eventos associados a alt
 ## Decisões pendentes
 
 - Provedor de IA e transcrição.
-- Protocolo e suporte real do RM22/Micro OS 10; não há promessa de app instalável.
+- Integração Wear OS com cliente Kotlin; novos dispositivos usam contratos versionados e adapters por plataforma.
 - Serviços AWS de execução, mensageria, região e orçamento.
 - Contratos HTTP e eventos e sua estratégia de versionamento.
 
 ## Design
 
 https://www.figma.com/design/VdmGhvLilFgMFDro8qt3GM?node-id=7-6
+
+## Base do projeto
+
+Api depende de Application e Infrastructure; Infrastructure depende de Application; Application depende de Domain. As dependências externas serão registradas na composição da API. Cada serviço mantém seu próprio ciclo de implantação.
