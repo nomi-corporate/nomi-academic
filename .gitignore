@@ -21,3 +21,4 @@ Thumbs.db
 
 # Published binaries
 artifacts/
+.local/

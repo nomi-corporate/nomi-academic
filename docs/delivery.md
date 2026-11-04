@@ -24,6 +24,7 @@ Workflow `Service CI`, jobs:
 - `Build and smoke check`: restaura, compila Release e publica a API, executa os projetos de teste disponíveis em `tests/**/*.csproj` e exige HTTP 200 com corpo `Healthy` em `/health/live`.
 - `Container build`: constrói a imagem, inicia um contêiner, valida o mesmo liveness. A exportação da imagem é opcional em execução manual.
 - `Workflow lint`: valida o próprio workflow.
+- `Database integration`: sobe PostgreSQL isolado, verifica permissões, conexão EF Core, readiness, indisponibilidade, reconexão e persistência após reinício. Confere também a ferramenta de migrations. Detalhes em [banco local](local-database.md).
 
 Checks de proteção existentes mantêm seus nomes: `Build and smoke check` e `Container build`. Recomenda-se tornar `Workflow lint` obrigatório também; adicionar essa exigência é uma configuração separada do GitHub.
 

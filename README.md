@@ -19,7 +19,16 @@ dotnet build Nomi.Academic.sln
 dotnet run --project src/Nomi.Academic.Api
 ```
 
-Liveness: `http://localhost:5101/health/live`. O endpoint confirma somente que o processo responde; conexões de banco e filas ainda serão implementadas.
+Liveness: `http://localhost:5101/health/live` confirma que o processo responde. Readiness em `/health/ready` confirma conexão PostgreSQL quando configurada, ou retorna 503 quando o banco está ausente/indisponível.
+
+Para executar com PostgreSQL local, em PowerShell 7:
+
+```powershell
+pwsh -NoProfile -File ./scripts/Start-LocalDatabase.ps1
+pwsh -NoProfile -File ./scripts/Run-LocalAcademic.ps1
+```
+
+Consulte o [passo a passo do banco local](docs/local-database.md), incluindo permissões, credenciais locais, migrations e validação de persistência.
 
 ## Estrutura
 
@@ -28,7 +37,7 @@ Liveness: `http://localhost:5101/health/live`. O endpoint confirma somente que o
 - `src/Nomi.Academic.Domain`: regras e modelos de domínio.
 - `src/Nomi.Academic.Infrastructure`: adapters de persistência e provedores externos.
 
-Ainda não há endpoints acadêmicos, autenticação Cognito, banco configurado ou envio de notificações. A base executa sem credenciais AWS. As próximas entregas adicionam as funcionalidades da TEC-003.
+O banco local e a conexão EF Core estão preparados. Tabelas/migrations de negócio, endpoints acadêmicos, autenticação Cognito e envio de notificações entram nas HUs correspondentes. A base executa sem credenciais AWS; sem configuração de banco, liveness continua disponível e readiness retorna 503.
 
 ## Contêiner
 
