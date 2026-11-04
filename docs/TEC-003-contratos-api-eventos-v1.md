@@ -1,6 +1,6 @@
 # Nomi — Contratos de APIs e eventos
 
-**Referência:** TEC-003 · **Versão:** 0.2 · **Data:** 04/11/2026  
+**Referência:** TEC-003 · **Versão:** 0.2 · **Data:** 04/11/2026
 **Estado:** documento aprovado pelo responsável pelo projeto em 04/11/2026; implementação ainda não realizada.
 
 ## 1. Objetivo e escopo
