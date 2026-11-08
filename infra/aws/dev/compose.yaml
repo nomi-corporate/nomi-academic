@@ -1,0 +1,71 @@
+name: nomi-dev
+
+x-api: &api
+  restart: unless-stopped
+  mem_limit: 384m
+  logging:
+    driver: local
+    options:
+      max-size: 10m
+      max-file: "3"
+  volumes:
+    - type: bind
+      source: ${NOMI_RDS_CA:?Informe o caminho absoluto do certificado RDS}
+      target: /app/certs/global-bundle.pem
+      read_only: true
+      bind:
+        create_host_path: false
+  healthcheck:
+    # The runtime images contain Bash, but do not include curl or wget.
+    test:
+      - CMD
+      - /bin/bash
+      - -ec
+      - |
+        exec 3<>/dev/tcp/127.0.0.1/8080
+        printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3
+        IFS= read -r status <&3
+        [[ "$$status" == *" 200 "* ]]
+    interval: 15s
+    timeout: 8s
+    retries: 3
+    start_period: 20s
+
+services:
+  academic:
+    <<: *api
+    image: ${NOMI_ACADEMIC_IMAGE:?Informe a imagem Academic por digest}
+    container_name: nomi-academic
+    env_file:
+      - path: ${NOMI_SECRETS_DIR:?Informe o diretorio absoluto dos arquivos de credenciais}/academic.env
+        format: raw
+    ports:
+      - "127.0.0.1:${NOMI_ACADEMIC_PORT:-5101}:8080"
+    networks: [academic]
+
+  assistant:
+    <<: *api
+    image: ${NOMI_ASSISTANT_IMAGE:?Informe a imagem Assistant por digest}
+    container_name: nomi-assistant
+    env_file:
+      - path: ${NOMI_SECRETS_DIR:?Informe o diretorio absoluto dos arquivos de credenciais}/assistant.env
+        format: raw
+    ports:
+      - "127.0.0.1:${NOMI_ASSISTANT_PORT:-5102}:8080"
+    networks: [assistant]
+
+  notifications:
+    <<: *api
+    image: ${NOMI_NOTIFICATIONS_IMAGE:?Informe a imagem Notifications por digest}
+    container_name: nomi-notifications
+    env_file:
+      - path: ${NOMI_SECRETS_DIR:?Informe o diretorio absoluto dos arquivos de credenciais}/notifications.env
+        format: raw
+    ports:
+      - "127.0.0.1:${NOMI_NOTIFICATIONS_PORT:-5103}:8080"
+    networks: [notifications]
+
+networks:
+  academic: {}
+  assistant: {}
+  notifications: {}

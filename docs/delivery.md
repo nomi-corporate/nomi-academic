@@ -88,4 +88,13 @@ Se as variaveis estiverem ausentes ou divergentes, o job falha antes de autentic
 
 ### Implantacao ainda pendente
 
-Faltam configuracao de execucao/segredos por servico na EC2, HTTPS, autenticacao das APIs, readiness das dependencias, implantacao por digest e rollback. Assistant e Notifications ainda nao possuem persistencia integrada ao codigo. Publicar uma imagem nao conclui CD, TEC-007 ou HUs funcionais.
+Faltam configuracao de execucao/segredos por servico na EC2, HTTPS, autenticacao das APIs, readiness das dependencias, implantacao por digest e rollback. Os três serviços têm conexão PostgreSQL/readiness implementados; entidades e migrations de negócio continuam pendentes. Publicar uma imagem nao conclui CD, TEC-007 ou HUs funcionais.
+
+
+## Operação compartilhada na EC2 — TEC-004 / TEC-007 (entrega parcial)
+
+A definição em [infra/aws/dev](../infra/aws/dev/README.md) organiza as imagens independentes dos três serviços. Não substitui o compose.yaml local do Academic, não hospeda PostgreSQL na EC2 e não cria recursos AWS. O manifesto release.env registra os digests já validados no servidor; runtime.env e os arquivos de credenciais permanecem fora do Git. Atualizar a aplicação não atualiza implicitamente esse manifesto.
+
+O job EC2 Compose integration testa a configuração com imagens reais compiladas das fontes, PostgreSQL descartável e senhas aleatórias. Academic usa o código deste checkout; Assistant/Notifications usam commits fixados no workflow, correspondentes à base implantada. Ao alterar imagens-base ou contratos de health, revisar esses pins e repetir a validação; o teste não baixa as imagens privadas nem comprova os digests do ECR. A publicação depende também desse job.
+
+A adoção inicial exige migrar cada contêiner manual para o Compose, preservando uma cópia parada antes da troca. O guia detalha validação, atualização seletiva e recuperação por imagem anterior. Não é deploy automático nem rolling update; haverá breve indisponibilidade no serviço trocado. HTTPS, autenticação, segredos gerenciados e rollback de migrations permanecem pendentes.

@@ -50,6 +50,7 @@ CI verifica compilação, publicação, liveness e construção da imagem. Após
 
 ## Documentação
 
+- [Operação dos três serviços na EC2 com Compose](infra/aws/dev/README.md)
 - [Arquitetura](docs/architecture.md)
 - [Entrega](docs/delivery.md)
 - [Contribuição](CONTRIBUTING.md)
