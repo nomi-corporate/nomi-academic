@@ -26,6 +26,33 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: '1'
   DOTNET_NOLOGO: '1'
 jobs:
+  compose:
+    name: EC2 Compose integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Checkout validated Assistant baseline
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: nomi-corporate/nomi-assistant
+          ref: 75fd2a406e895ea01a7864217843617562f3f14b
+          path: .local/compose-tests/nomi-assistant
+          persist-credentials: false
+      - name: Checkout validated Notifications baseline
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: nomi-corporate/nomi-notifications
+          ref: bd6f65c76f7f10d1dcdb643ff57699e1918de6dd
+          path: .local/compose-tests/nomi-notifications
+          persist-credentials: false
+      - name: Validate Compose with real API images and isolated PostgreSQL
+        run: |
+          python3 scripts/Test-Ec2Compose.py \
+            --assistant-source .local/compose-tests/nomi-assistant \
+            --notifications-source .local/compose-tests/nomi-notifications
   database:
     name: Database integration
     runs-on: ubuntu-latest
@@ -188,7 +215,7 @@ jobs:
 
   publish:
     name: Publish image to ECR
-    needs: [workflow, build, container, database]
+    needs: [workflow, build, container, database, compose]
     if: >-
       github.repository == 'nomi-corporate/nomi-academic' &&
       github.ref == 'refs/heads/master' &&

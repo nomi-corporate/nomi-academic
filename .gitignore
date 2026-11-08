@@ -22,3 +22,9 @@ Thumbs.db
 # Published binaries
 artifacts/
 .local/
+
+# EC2 host configuration and Python verification
+infra/aws/dev/runtime.env
+infra/aws/dev/*.local.env
+__pycache__/
+*.pyc
