@@ -28,3 +28,6 @@ infra/aws/dev/runtime.env
 infra/aws/dev/*.local.env
 __pycache__/
 *.pyc
+
+# Local HTTPS hostname configuration
+infra/aws/dev/https.env

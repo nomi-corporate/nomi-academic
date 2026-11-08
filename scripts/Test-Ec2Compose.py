@@ -5,6 +5,9 @@ import os
 from pathlib import Path
 import secrets
 import shutil
+import ssl
+import urllib.error
+import urllib.request
 import subprocess
 import sys
 import tempfile
@@ -88,10 +91,18 @@ def main():
                 "container_name": prefix + "-" + service,
                 "networks": [service, "testdb"],
             }
+        definition["services"]["caddy"] = {
+            "container_name": prefix + "-caddy",
+            "environment": {"NOMI_DOMAIN": "localhost"},
+        }
+        # Test-only override uses ephemeral loopback ports; production continues using 80/443.
         override.write_text(json.dumps(definition), encoding="utf-8")
+        port_override = directory / "test-ports.yaml"
+        port_override.write_text("services:\n  caddy:\n    ports: !override\n      - \"127.0.0.1::80\"\n      - \"127.0.0.1::443\"\n", encoding="utf-8")
         compose = [docker, "compose", "--project-name", prefix, "--env-file", str(release),
-                   "--env-file", str(runtime), "--file", str(DEPLOY / "compose.yaml"), "--file", str(override)]
+                   "--env-file", str(runtime), "--file", str(DEPLOY / "compose.yaml"), "--file", str(DEPLOY / "compose.https.yaml"), "--file", str(override), "--file", str(port_override)]
         ports = {"NOMI_" + s.upper() + "_PORT": "0" for s in SERVICES}
+        ports["NOMI_DOMAIN"] = "localhost"
         try:
             sources = {"academic": ROOT, "assistant": args.assistant_source.resolve(), "notifications": args.notifications_source.resolve()}
             for service, source in sources.items():
@@ -133,18 +144,80 @@ def main():
                 assert "ConnectionStrings__" + service.capitalize() in values
                 assert all("ConnectionStrings__" + other.capitalize() not in values for other in SERVICES if other != service)
             print("Três APIs reais saudáveis: portas somente loopback, memória limitada, certificado readonly e configurações isoladas.", flush=True)
+            gateway = prefix + "-caddy"
+            gateway_info = json.loads(dc("inspect", gateway).stdout)[0]
+            https_port = gateway_info["NetworkSettings"]["Ports"]["443/tcp"][0]["HostPort"]
+            http_port = gateway_info["NetworkSettings"]["Ports"]["80/tcp"][0]["HostPort"]
+            trust = directory / "caddy-test-root.crt"
+            for _ in range(30):
+                copied = dc("cp", gateway + ":/data/caddy/pki/authorities/local/root.crt", str(trust), check=False)
+                if copied.returncode == 0:
+                    break
+                time.sleep(1)
+            else:
+                raise RuntimeError("Caddy local test CA was not created.")
+            context = ssl.create_default_context(cafile=str(trust))
+
+            def request(path, method="GET", status=200):
+                req = urllib.request.Request("https://localhost:" + https_port + path, method=method)
+                try:
+                    response = urllib.request.urlopen(req, context=context, timeout=20)
+                except urllib.error.HTTPError as error:
+                    response = error
+                with response:
+                    assert response.status == status, (path, method, response.status)
+                    assert "Server" not in response.headers
+                    body = response.read().decode()
+                    if status == 200 and method == "GET":
+                        assert body == "Healthy"
+
+            for service in SERVICES:
+                for endpoint in ("live", "ready"):
+                    request(f"/{service}/health/{endpoint}")
+                request(f"/{service}/health/live", "HEAD")
+                request(f"/{service}/health/live", "POST", 404)
+                request(f"/{service}/api/private", status=404)
+            request("/", status=404)
+
+            class NoRedirect(urllib.request.HTTPRedirectHandler):
+                def redirect_request(self, *args):
+                    return None
+
+            opener = urllib.request.build_opener(NoRedirect)
+            try:
+                opener.open("http://localhost:" + http_port + "/academic/health/live", timeout=10)
+                raise AssertionError("HTTP should redirect to HTTPS.")
+            except urllib.error.HTTPError as response:
+                assert response.code in (301, 302, 307, 308)
+                assert response.headers["Location"].startswith("https://")
+            run(compose + ["up", "--detach", "--no-deps", "--force-recreate", "caddy"], timeout=90)
+            gateway_info = json.loads(dc("inspect", gateway).stdout)[0]
+            https_port = gateway_info["NetworkSettings"]["Ports"]["443/tcp"][0]["HostPort"]
+            for _ in range(20):
+                try:
+                    request("/academic/health/ready")
+                    break
+                except OSError:
+                    time.sleep(0.5)
+            else:
+                raise AssertionError("HTTPS did not recover with its persisted CA.")
+            for service in SERVICES:
+                assert json.loads(dc("inspect", prefix + "-" + service).stdout)[0]["Id"] == before[service]
+            print("HTTPS local validado: TLS verificado, redirect, health das três APIs, rotas/métodos bloqueados e CA persistente.", flush=True)
             # Change only one service env file to verify recreation and failure detection.
             assistant_env.write_text(original_env.replace(password, "intentionally-invalid"), encoding="utf-8")
             failed = run(compose + ["up", "--detach", "--no-deps", "--force-recreate", "--wait", "--wait-timeout", "60", "assistant"], check=False, timeout=90)
             assert failed.returncode != 0, "Compose accepted an unhealthy database connection."
+            request("/assistant/health/ready", status=503)
             for service in ("academic", "notifications"):
                 item = json.loads(dc("inspect", prefix + "-" + service).stdout)[0]
                 assert item["Id"] == before[service] and item["State"]["Health"]["Status"] == "healthy"
             assistant_env.write_text(original_env, encoding="utf-8")
             run(compose + ["up", "--detach", "--no-deps", "--force-recreate", "--wait", "--wait-timeout", "120", "assistant"], timeout=150)
+            request("/assistant/health/ready")
             print("Falha de readiness rejeitada; recuperação por recriação validada, sem reiniciar os outros serviços.", flush=True)
         finally:
-            run(compose + ["down", "--remove-orphans"], check=False)
+            run(compose + ["down", "--remove-orphans", "--volumes"], check=False)
             for name in resources:
                 dc("rm", "--force", name, check=False)
             if network_created:

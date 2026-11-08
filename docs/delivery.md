@@ -98,3 +98,8 @@ A definição em [infra/aws/dev](../infra/aws/dev/README.md) organiza as imagens
 O job EC2 Compose integration testa a configuração com imagens reais compiladas das fontes, PostgreSQL descartável e senhas aleatórias. Academic usa o código deste checkout; Assistant/Notifications usam commits fixados no workflow, correspondentes à base implantada. Ao alterar imagens-base ou contratos de health, revisar esses pins e repetir a validação; o teste não baixa as imagens privadas nem comprova os digests do ECR. A publicação depende também desse job.
 
 A adoção inicial exige migrar cada contêiner manual para o Compose, preservando uma cópia parada antes da troca. O guia detalha validação, atualização seletiva e recuperação por imagem anterior. Não é deploy automático nem rolling update; haverá breve indisponibilidade no serviço trocado. HTTPS, autenticação, segredos gerenciados e rollback de migrations permanecem pendentes.
+
+
+### HTTPS de desenvolvimento (entrega parcial)
+
+O overlay opcional em infra/aws/dev/compose.https.yaml adiciona Caddy fixado por digest. O helper https.py valida o hostname DuckDNS e opera somente o proxy; não recebe senhas dos bancos nem token DNS. Somente health checks GET/HEAD são publicados; rotas funcionais continuam bloqueadas até autenticação/autorização. O teste EC2 Compose integration inclui TLS com CA local verificada, redirect, allowlist de rotas/métodos, preservação de 503 e persistência de CA ao recriar o proxy. O teste não solicita certificados públicos. DNS/portas AWS/certificado público exigem validação na implantação conforme [HTTPS](../infra/aws/dev/HTTPS.md).
