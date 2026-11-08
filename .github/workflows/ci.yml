@@ -275,7 +275,7 @@ jobs:
           }
           Path("artifacts/ecr-image.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
           PY
-          printf '### Imagem publicada no ECR\n\nCommit: `%s`\n\nTag: `%s`\n\nImagem para implantacao: `%s`\n' \
+          printf '### Imagem publicada no ECR\n\nCommit: %s\n\nTag: %s\n\nImagem para implantacao: %s\n' \
             "$GITHUB_SHA" "$image_tag" "$digest_uri" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload image publication identity
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
