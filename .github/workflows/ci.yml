@@ -6,6 +6,10 @@ on:
     branches: [master]
   workflow_dispatch:
     inputs:
+      publish_image:
+        description: Publicar imagem no ECR (somente master, apos os checks)
+        type: boolean
+        default: false
       export_image:
         description: Exportar imagem Docker para download (artefato temporário)
         type: boolean
@@ -181,3 +185,105 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 1
+
+  publish:
+    name: Publish image to ECR
+    needs: [workflow, build, container, database]
+    if: >-
+      github.repository == 'nomi-corporate/nomi-academic' &&
+      github.ref == 'refs/heads/master' &&
+      (github.event_name == 'push' ||
+       (github.event_name == 'workflow_dispatch' && inputs.publish_image))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+      ECR_REGISTRY: 338128499585.dkr.ecr.us-east-2.amazonaws.com
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Validate publication configuration
+        run: |
+          [[ "$AWS_REGION" == 'us-east-2' ]] || { echo '::error::AWS_REGION deve ser us-east-2.'; exit 1; }
+          [[ "$ECR_REPOSITORY" == 'nomi-academic' ]] || { echo '::error::ECR_REPOSITORY incorreto ou ausente.'; exit 1; }
+          [[ "$AWS_ROLE_ARN" == 'arn:aws:iam::338128499585:role/nomi-dev-github-academic-role' ]] || { echo '::error::AWS_ROLE_ARN incorreto ou ausente.'; exit 1; }
+      - name: Build release image
+        run: docker build --tag nomi-academic:"$GITHUB_SHA" .
+      - name: Validate release image liveness
+        run: |
+          container_id=$(docker run --detach --publish 127.0.0.1:18080:8080 nomi-academic:"$GITHUB_SHA")
+          trap 'docker logs "$container_id"; docker rm --force "$container_id" > /dev/null' EXIT
+          for attempt in {1..30}; do
+            printf 'Liveness da imagem de release: tentativa %s\n' "$attempt"
+            if body=$(curl --fail --silent http://127.0.0.1:18080/health/live) && [[ "$body" == 'Healthy' ]]; then
+              echo 'Imagem de release: HTTP 200 Healthy' >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1
+      - name: Authenticate to AWS using OIDC
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          allowed-account-ids: '338128499585'
+          role-session-name: nomi-${{ github.run_id }}-${{ github.run_attempt }}
+          role-duration-seconds: 900
+          action-timeout-s: 120
+          retry-max-attempts: 3
+          unset-current-credentials: true
+          translate-env-variables: false
+      - name: Authenticate Docker to ECR
+        run: |
+          aws ecr get-login-password --region "$AWS_REGION" |
+            docker login --username AWS --password-stdin "$ECR_REGISTRY"
+      - name: Push validated image and record registry digest
+        run: |
+          image_tag="sha-${GITHUB_SHA}-run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          image_uri="$ECR_REGISTRY/$ECR_REPOSITORY:$image_tag"
+          docker tag nomi-academic:"$GITHUB_SHA" "$image_uri"
+          docker push "$image_uri"
+          digest=$(aws ecr batch-get-image --region "$AWS_REGION" \
+            --repository-name "$ECR_REPOSITORY" \
+            --image-ids "imageTag=$image_tag" \
+            --query 'images[0].imageId.imageDigest' --output text)
+          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo '::error::Digest ECR ausente ou invalido.'; exit 1; }
+          digest_uri="$ECR_REGISTRY/$ECR_REPOSITORY@$digest"
+          docker image inspect "$image_uri" --format '{{json .RepoDigests}}' |
+            grep --fixed-strings --quiet "$digest_uri"
+          mkdir -p artifacts
+          export NOMI_IMAGE_TAG="$image_tag" NOMI_IMAGE_URI="$image_uri" NOMI_IMAGE_DIGEST_URI="$digest_uri"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          metadata = {
+              "repository": os.environ["GITHUB_REPOSITORY"],
+              "commit": os.environ["GITHUB_SHA"],
+              "run_id": os.environ["GITHUB_RUN_ID"],
+              "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+              "region": os.environ["AWS_REGION"],
+              "image_tag": os.environ["NOMI_IMAGE_TAG"],
+              "image_uri": os.environ["NOMI_IMAGE_URI"],
+              "image_digest_uri": os.environ["NOMI_IMAGE_DIGEST_URI"],
+          }
+          Path("artifacts/ecr-image.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+          PY
+          printf '### Imagem publicada no ECR\n\nCommit: `%s`\n\nTag: `%s`\n\nImagem para implantacao: `%s`\n' \
+            "$GITHUB_SHA" "$image_tag" "$digest_uri" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload image publication identity
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nomi-academic-ecr-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/ecr-image.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Clear Docker registry credentials
+        if: always()
+        run: docker logout "$ECR_REGISTRY"
