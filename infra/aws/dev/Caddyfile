@@ -1,0 +1,61 @@
+{
+	admin off
+	servers {
+		protocols h1 h2
+	}
+}
+
+{$NOMI_DOMAIN} {
+	header {
+		-Server
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+	}
+
+	# Only health probes are public until authentication/authorization is implemented.
+	@academic {
+		method GET HEAD
+		path /academic/health/live /academic/health/ready
+	}
+	handle @academic {
+		uri strip_prefix /academic
+		reverse_proxy academic:8080 {
+			transport http {
+				dial_timeout 3s
+				response_header_timeout 15s
+			}
+		}
+	}
+
+	@assistant {
+		method GET HEAD
+		path /assistant/health/live /assistant/health/ready
+	}
+	handle @assistant {
+		uri strip_prefix /assistant
+		reverse_proxy assistant:8080 {
+			transport http {
+				dial_timeout 3s
+				response_header_timeout 15s
+			}
+		}
+	}
+
+	@notifications {
+		method GET HEAD
+		path /notifications/health/live /notifications/health/ready
+	}
+	handle @notifications {
+		uri strip_prefix /notifications
+		reverse_proxy notifications:8080 {
+			transport http {
+				dial_timeout 3s
+				response_header_timeout 15s
+			}
+		}
+	}
+
+	handle {
+		respond "Not found" 404
+	}
+}

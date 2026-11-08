@@ -106,3 +106,8 @@ O helper ignora variáveis `NOMI_*` e `COMPOSE_*` herdadas do shell, para que um
 Os testes verificam health checks, portas loopback, limite de memória, certificado readonly, configuração exclusiva por serviço, preservação de `$` na senha, rejeição de configuração inválida, falha de readiness e recuperação seletiva sem reiniciar as outras APIs. Recursos recebem nomes únicos e são removidos ao final. Um encerramento abrupto do processo pode exigir limpar apenas recursos com o prefixo da execução de teste.
 
 Ainda faltam HTTPS, autenticação de usuários, segredos gerenciados, deploy remoto automatizado, backups/restauração validados e recuperação de migrations. Esta entrega organiza a operação de desenvolvimento e não conclui as TECs ou HUs funcionais.
+
+
+## Entrada HTTPS opcional
+
+O [guia HTTPS](HTTPS.md) adiciona Caddy sem recriar as APIs, usando o domínio gratuito de desenvolvimento. Somente health checks GET/HEAD ficam públicos até implementar autenticação. A ativação depende de DNS, regras de entrada da EC2 e emissão de certificado público; a base Compose segue utilizável sem esse overlay.
