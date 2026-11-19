@@ -69,3 +69,4 @@ networks:
   academic: {}
   assistant: {}
   notifications: {}
+  identity: {}
