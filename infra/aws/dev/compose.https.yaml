@@ -19,7 +19,7 @@ services:
           create_host_path: false
       - caddy_data:/data
       - caddy_config:/config
-    networks: [academic, assistant, notifications]
+    networks: [academic, assistant, notifications, identity]
     logging:
       driver: local
       options:
