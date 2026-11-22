@@ -18,7 +18,7 @@ Cada serviço tem rede Docker própria, acesso de saída ao RDS, limite de 384 M
 
 O serviço Assistant recebe `Transcription__BucketName=nomi-dev-transcription-transcriptionbucket-6rcao9odq3hg` e `AWS__Region=us-east-2` pelo Compose de desenvolvimento. A stack S3 correspondente foi mostrada em `CREATE_COMPLETE` em 21/11/2026, com `AssistantRoleName=nomi-dev-ec2-role` informado pelo responsável. Ainda é necessário confirmar o acesso efetivo da role da EC2 e do Transcribe, aplicar a migration do Assistant e publicar a imagem com as rotas de áudio. Recriar o contêiner Assistant para que essas variáveis sejam aplicadas.
 
-Para o slice de matérias, `academic.env` também deve conter `Identity__BaseUrl=https://nomi-dev-equipe.duckdns.org` (ou uma origem privada com TLS). Esse valor não é segredo: é a origem usada para validar o Bearer token no Nomi Identity. Fora do ambiente Development, o resolver rejeita HTTP e bases com userinfo, query ou fragmento. Sem uma origem válida, as rotas `/api/v1/subjects` respondem `503` por dependência de identidade indisponível.
+Academic e Assistant recebem `Identity__BaseUrl=https://nomi-dev-equipe.duckdns.org` pelo `environment` do `compose.yaml`, não pelos arquivos `.env`: o `compose.py` aceita somente a connection string nesses arquivos. Esse valor não é segredo: é a origem usada para validar o Bearer token no Nomi Identity. Fora do ambiente Development, o resolver rejeita HTTP e bases com userinfo, query ou fragmento. Sem uma origem válida, as rotas `/api/v1/subjects` respondem `503` por dependência de identidade indisponível.
 
 ## Arquivos
 

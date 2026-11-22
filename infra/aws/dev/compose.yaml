@@ -39,6 +39,8 @@ services:
     env_file:
       - path: ${NOMI_SECRETS_DIR:?Informe o diretorio absoluto dos arquivos de credenciais}/academic.env
         format: raw
+    environment:
+      Identity__BaseUrl: https://nomi-dev-equipe.duckdns.org
     ports:
       - "127.0.0.1:${NOMI_ACADEMIC_PORT:-5101}:8080"
     networks: [academic]
@@ -53,6 +55,7 @@ services:
     environment:
       Transcription__BucketName: nomi-dev-transcription-transcriptionbucket-6rcao9odq3hg
       AWS__Region: us-east-2
+      Identity__BaseUrl: https://nomi-dev-equipe.duckdns.org
     ports:
       - "127.0.0.1:${NOMI_ASSISTANT_PORT:-5102}:8080"
     networks: [assistant]
