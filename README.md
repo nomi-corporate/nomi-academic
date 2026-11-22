@@ -37,7 +37,7 @@ Consulte o [passo a passo do banco local](docs/local-database.md), incluindo per
 - `src/Nomi.Academic.Domain`: regras e modelos de domínio.
 - `src/Nomi.Academic.Infrastructure`: adapters de persistência e provedores externos.
 
-O banco local e a conexão EF Core estão preparados. Tabelas/migrations de negócio, endpoints acadêmicos, autenticação Cognito e envio de notificações entram nas HUs correspondentes. A base executa sem credenciais AWS; sem configuração de banco, liveness continua disponível e readiness retorna 503.
+O banco local e a conexão EF Core estão preparados. As rotas locais de matérias, professores, perfil, Hoje, Agenda, grupos e criação de compromissos usam a sessão validada pelo Nomi Identity. A criação de compromisso grava o evento na outbox na mesma transação; publicação e notificações ainda não estão implementadas. Cada ambiente precisa aplicar as migrations antes de usar as rotas novas. A base executa sem credenciais AWS; sem configuração de banco, liveness continua disponível e readiness retorna 503.
 
 ## Contêiner
 
@@ -54,3 +54,4 @@ CI verifica compilação, publicação, liveness e construção da imagem. Após
 - [Arquitetura](docs/architecture.md)
 - [Entrega](docs/delivery.md)
 - [Contribuição](CONTRIBUTING.md)
+- [Hoje, Agenda e Grupos — implementação local parcial](docs/agenda-groups-local.md)
