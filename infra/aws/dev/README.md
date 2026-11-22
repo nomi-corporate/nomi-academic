@@ -16,6 +16,10 @@ Este Compose assume a execução dos três contêineres já existentes. Não cri
 
 Cada serviço tem rede Docker própria, acesso de saída ao RDS, limite de 384 MiB, logs locais limitados e reinício `unless-stopped`. O certificado é montado readonly. O health check executa HTTP `/health/ready` com Bash já presente nas imagens; não instala curl/wget nem pacotes no servidor. O estado `healthy` indica conexão ao banco, não domínio funcional ou tabelas atualizadas. Docker não reinicia automaticamente um processo só porque ficou `unhealthy`.
 
+O serviço Assistant recebe `Transcription__BucketName=nomi-dev-transcription-transcriptionbucket-6rcao9odq3hg` e `AWS__Region=us-east-2` pelo Compose de desenvolvimento. A stack S3 correspondente foi mostrada em `CREATE_COMPLETE` em 21/11/2026, com `AssistantRoleName=nomi-dev-ec2-role` informado pelo responsável. Ainda é necessário confirmar o acesso efetivo da role da EC2 e do Transcribe, aplicar a migration do Assistant e publicar a imagem com as rotas de áudio. Recriar o contêiner Assistant para que essas variáveis sejam aplicadas.
+
+Para o slice de matérias, `academic.env` também deve conter `Identity__BaseUrl=https://nomi-dev-equipe.duckdns.org` (ou uma origem privada com TLS). Esse valor não é segredo: é a origem usada para validar o Bearer token no Nomi Identity. Fora do ambiente Development, o resolver rejeita HTTP e bases com userinfo, query ou fragmento. Sem uma origem válida, as rotas `/api/v1/subjects` respondem `503` por dependência de identidade indisponível.
+
 ## Arquivos
 
 - `compose.yaml`: execução e health checks. Não contém senhas nem builds.
@@ -105,9 +109,9 @@ O helper ignora variáveis `NOMI_*` e `COMPOSE_*` herdadas do shell, para que um
 
 Os testes verificam health checks, portas loopback, limite de memória, certificado readonly, configuração exclusiva por serviço, preservação de `$` na senha, rejeição de configuração inválida, falha de readiness e recuperação seletiva sem reiniciar as outras APIs. Recursos recebem nomes únicos e são removidos ao final. Um encerramento abrupto do processo pode exigir limpar apenas recursos com o prefixo da execução de teste.
 
-Ainda faltam HTTPS, autenticação de usuários, segredos gerenciados, deploy remoto automatizado, backups/restauração validados e recuperação de migrations. Esta entrega organiza a operação de desenvolvimento e não conclui as TECs ou HUs funcionais.
+Ainda faltam segredos gerenciados, deploy remoto automatizado, backups/restauração validados, aplicação da migration de matérias no RDS e validação ponta a ponta com o Mobile. O HTTPS/Caddy e a validação de sessão pelo Nomi Identity estão preparados nesta branch, mas a publicação da revisão atual ainda depende da integração do PR e da atualização da imagem Academic. Esta entrega não conclui as TECs ou HUs funcionais.
 
 
 ## Entrada HTTPS opcional
 
-O [guia HTTPS](HTTPS.md) adiciona Caddy sem recriar as APIs, usando o domínio gratuito de desenvolvimento. Somente health checks GET/HEAD ficam públicos até implementar autenticação. A ativação depende de DNS, regras de entrada da EC2 e emissão de certificado público; a base Compose segue utilizável sem esse overlay.
+O [guia HTTPS](HTTPS.md) adiciona Caddy sem recriar as APIs, usando o domínio gratuito de desenvolvimento. Health checks e as rotas autenticadas do Identity/Academic são encaminhados pelo Caddy; a autenticação continua sendo validada pelos serviços. A ativação depende de DNS, regras de entrada da EC2 e emissão de certificado público; a base Compose segue utilizável sem esse overlay.

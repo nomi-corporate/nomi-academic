@@ -27,6 +27,20 @@
 		}
 	}
 
+	# Academic v1 is authenticated by the API; Caddy only removes the public prefix.
+	@academicApi {
+		path /academic/api/v1/*
+	}
+	handle @academicApi {
+		uri strip_prefix /academic
+		reverse_proxy academic:8080 {
+			transport http {
+				dial_timeout 3s
+				response_header_timeout 15s
+			}
+		}
+	}
+
 	@assistant {
 		method GET HEAD
 		path /assistant/health/live /assistant/health/ready
@@ -37,6 +51,23 @@
 			transport http {
 				dial_timeout 3s
 				response_header_timeout 15s
+			}
+		}
+	}
+
+	# Assistant v1 (audio upload slots and transcriptions) is authenticated by the API.
+	@assistantApi {
+		path /assistant/api/v1/*
+	}
+	handle @assistantApi {
+		uri strip_prefix /assistant
+		request_body {
+			max_size 64KB
+		}
+		reverse_proxy assistant:8080 {
+			transport http {
+				dial_timeout 3s
+				response_header_timeout 30s
 			}
 		}
 	}
