@@ -56,9 +56,10 @@ services:
       Transcription__BucketName: nomi-dev-transcription-transcriptionbucket-6rcao9odq3hg
       AWS__Region: us-east-2
       Identity__BaseUrl: https://nomi-dev-equipe.duckdns.org
-      # Interpretation reads the user's subjects/professors through the Academic API.
+      # Interpretation reads the user's subjects/professors through the Academic API;
+      # the Anthropic API key comes from assistant.env (Anthropic__ApiKey).
       Academic__BaseUrl: https://nomi-dev-equipe.duckdns.org/academic
-      Interpretation__ModelId: us.anthropic.claude-haiku-4-5-20251001-v1:0
+      Interpretation__ModelId: claude-haiku-5-5
     ports:
       - "127.0.0.1:${NOMI_ASSISTANT_PORT:-5102}:8080"
     networks: [assistant]
