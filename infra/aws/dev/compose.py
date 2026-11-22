@@ -11,18 +11,20 @@ import subprocess
 ROOT = Path(__file__).resolve().parent
 SERVICES = ("academic", "assistant", "notifications")
 REGISTRY = "338128499585.dkr.ecr.us-east-2.amazonaws.com"
+# Secrets other than the connection string that a service may receive from its own .env file.
+OPTIONAL_SECRETS = {"assistant": frozenset({"Anthropic__ApiKey"})}
 
 
-def read_settings(path, expected):
+def read_settings(path, expected, optional=frozenset()):
     values = {}
     for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         key, separator, value = line.partition("=")
-        if not separator or key not in expected or key in values:
+        if not separator or (key not in expected and key not in optional) or key in values:
             raise ValueError(f"Arquivo {path.name} contém chave desconhecida, duplicada ou linha inválida.")
         values[key] = value
-    if set(values) != set(expected):
+    if not set(expected) <= set(values):
         raise ValueError(f"Arquivo {path.name} está incompleto.")
     return values
 
@@ -46,7 +48,7 @@ def validate_files(release_path, runtime_path):
     for service in SERVICES:
         path = secrets / (service + ".env")
         expected = "ConnectionStrings__" + service.capitalize()
-        settings = read_settings(path, {expected})
+        settings = read_settings(path, {expected}, OPTIONAL_SECRETS.get(service, frozenset()))
         if not settings[expected].strip():
             raise ValueError(f"Conexão de {service} está vazia.")
         if os.name != "nt" and stat.S_IMODE(path.stat().st_mode) & 0o077:
