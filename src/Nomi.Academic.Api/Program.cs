@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Nomi.Academic.Infrastructure;
+using Nomi.Academic.Api;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddProblemDetails();
@@ -12,6 +13,11 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
     Predicate = check => check.Tags.Contains("ready")
 });
+app.MapSubjectEndpoints();
+app.MapProfessorEndpoints();
+app.MapProfileEndpoints();
+app.MapAgendaEndpoints();
+app.MapGroupsEndpoints();
 app.Run();
 
 public partial class Program;
