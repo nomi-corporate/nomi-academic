@@ -1,6 +1,6 @@
 # PostgreSQL local — passo a passo
 
-Esta entrega prepara a persistência para HU-106 (cadastrar matéria) e HU-107 (consultar matérias). Não conclui essas HUs. A infraestrutura aqui é local: nenhuma conta ou recurso AWS é necessário.
+Esta entrega prepara persistência e APIs de matérias/professores ligadas às HU-106–HU-111. As histórias permanecem parciais: a validação depende do serviço Nomi Identity, da migration aplicada no ambiente e do fluxo Mobile completo. A infraestrutura local não exige conta ou recurso AWS.
 
 ## Como as peças se conectam
 
@@ -56,13 +56,13 @@ Invoke-WebRequest http://127.0.0.1:5101/health/ready
 - `/health/live`: HTTP 200 significa que o processo responde, independentemente do banco.
 - `/health/ready`: HTTP 200 significa conexão EF Core/PostgreSQL funcionando; configuração ausente ou banco indisponível retorna HTTP 503.
 
-Readiness verifica conexão, não tabelas, migrations aplicadas, autorização de usuário final ou funcionamento de uma HU. Nenhum endpoint acadêmico é exposto nesta entrega.
+Readiness verifica conexão, não tabelas, migrations aplicadas, autorização de usuário final ou funcionamento de uma HU. A API oferece `POST/GET /api/v1/subjects`, `GET/PATCH /api/v1/subjects/{id}`, `PUT /api/v1/subjects/{id}/archive`, `PUT /api/v1/subjects/{id}/professors` e CRUD de `/api/v1/professors`. As rotas consultam Nomi Identity com o Bearer token recebido e só consultam registros do usuário autenticado. Alterações exigem `If-Match`; os POSTs de matérias e professores exigem `Idempotency-Key`, com replay da resposta original e retenção proposta de 24 horas. O endpoint móvel exige API ativa, Identity acessível e migrations aplicadas; isso não comprova o fluxo completo das HUs.
 
 ## 3. Entender e usar migrations
 
-Migration é um arquivo de código versionado que descreve uma mudança na estrutura do banco. Quando implementarmos o modelo de matérias na HU-106, a migration criará a tabela correspondente.
+Migration é um arquivo de código versionado que descreve uma mudança na estrutura do banco. As migrations atuais criam `academic.subjects`, `academic.professors`, o vínculo de professores e matérias com chaves compostas por usuário e as respostas persistentes de idempotência. Elas devem ser revisadas e aplicadas explicitamente com o usuário migrador; a API não aplica migrations automaticamente.
 
-A base atual contém DbContext, provedor e ferramenta EF Core fixada por versão. Os schemas locais já são criados pelo bootstrap; as tabelas de negócio serão modeladas nas HUs. Não há migration de negócio nesta etapa.
+A base contém DbContext, provedor e ferramenta EF Core fixada por versão. As migrations ainda precisam ser revisadas e aplicadas em cada ambiente; não são executadas automaticamente pela API.
 
 Conferir contexto/provedor/banco:
 
@@ -71,17 +71,15 @@ pwsh -NoProfile -File ./scripts/Invoke-LocalMigrations.ps1 -Action Info
 pwsh -NoProfile -File ./scripts/Invoke-LocalMigrations.ps1 -Action List
 ```
 
-Depois de implementar e revisar o modelo da HU, o fluxo será:
+Para gerar e revisar o SQL das migrations existentes:
 
 ```powershell
-# Exemplo de nome para a futura HU-106; não executar antes de implementar o modelo.
-pwsh -NoProfile -File ./scripts/Invoke-LocalMigrations.ps1 -Action Add -Name AddSubjects
 pwsh -NoProfile -File ./scripts/Invoke-LocalMigrations.ps1 -Action Script
 # Revisar .local/migrations.sql antes de aplicar no seu banco.
 pwsh -NoProfile -File ./scripts/Invoke-LocalMigrations.ps1 -Action Update
 ```
 
-Versionar os arquivos gerados em `src/Nomi.Academic.Infrastructure/Persistence/Migrations` junto com a mudança do modelo. O helper bloqueia Script/Update enquanto não houver migrations. Não aplicar migrations automaticamente na inicialização da API.
+Novos modelos exigem migration versionada em `src/Nomi.Academic.Infrastructure/Persistence/Migrations` e revisão do SQL antes da aplicação. O helper não aplica migrations automaticamente na inicialização da API.
 
 O helper usa a identidade de migrations e restaura a variável de ambiente ao terminar. O processo normal da API recebe apenas a identidade de aplicação, sem DDL e sem acesso ao schema de histórico.
 
